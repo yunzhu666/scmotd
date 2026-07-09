@@ -5,6 +5,8 @@ const controller = require('../controllers/ServerController');
 // ScKey å…¬å¼€æœåŠ¡å™¨æŽ¥å£
 router.post('/server/list', controller.upstream('server/list'));
 router.get('/server/list', controller.upstream('server/list'));
+router.get('/server/list/image', (req, res) => controller.getServerListImage(req, res));
+router.post('/server/list/image', (req, res) => controller.getServerListImage(req, res));
 router.post('/server/motd', (req, res) => controller.probeMotd(req, res));
 router.get('/server/motd/image', (req, res) => controller.getStatusImage(req, res));
 router.post('/server/motd/image', (req, res) => controller.getStatusImage(req, res));
@@ -53,6 +55,8 @@ router.get('/status', (req, res) => controller.getStatus(req, res));
 router.post('/status', (req, res) => controller.getStatus(req, res));
 router.get('/status/image', (req, res) => controller.getStatusImage(req, res));
 router.post('/status/image', (req, res) => controller.getStatusImage(req, res));
+router.get('/list/image', (req, res) => controller.getServerListImage(req, res));
+router.post('/list/image', (req, res) => controller.getServerListImage(req, res));
 
 // å¥åº·æ£€æŸ¥
 router.get('/health', (req, res) => controller.health(req, res));

@@ -177,6 +177,47 @@ function wrapHtml(content, footer) {
       line-height: 1.5;
       word-break: break-word;
     }
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+    .server-item {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.68);
+    }
+    .server-main { min-width: 0; }
+    .server-name {
+      color: #f9fafb;
+      font-size: 18px;
+      line-height: 1.25;
+      font-weight: 800;
+      word-break: break-word;
+    }
+    .server-meta {
+      margin-top: 5px;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .server-version {
+      align-self: start;
+      max-width: 120px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: rgba(147, 197, 253, 0.16);
+      color: #bfdbfe;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      word-break: break-word;
+    }
     .footer {
       margin-top: 16px;
       padding: 12px 14px;
@@ -242,6 +283,54 @@ function buildStatusHtml(status, options = {}) {
   return wrapHtml(content, footer);
 }
 
+function buildServerListHtml(list, options = {}) {
+  const pageSize = Math.max(1, Math.min(Number.parseInt(options.pageSize, 10) || 10, 50));
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const currentPage = Math.min(Math.max(1, Number.parseInt(options.page, 10) || 1), totalPages);
+  const start = (currentPage - 1) * pageSize;
+  const shown = list.slice(start, start + pageSize);
+  const version = String(options.version || '').trim();
+
+  const items = shown.map((server, index) => {
+    const children = Array.isArray(server.children) ? server.children : [];
+    const childHint = children.length
+      ? `子服 ${children.length} 个: ${children.slice(0, 3).map(child => child.name || child.ip || child.id || '未命名').join(' / ')}${children.length > 3 ? ' ...' : ''}`
+      : '';
+    const meta = [
+      server.ip ? `地址: ${server.ip}` : '',
+      typeof server.level === 'number' ? `等级: ${server.level}` : '',
+      childHint,
+    ].filter(Boolean).join(' · ');
+
+    return `
+      <div class="server-item">
+        <div class="stat-icon">${icons.server}</div>
+        <div class="server-main">
+          <div class="server-name">${start + index + 1}. ${escapeHtml(server.name || server.ip || server.id || '未命名服务器')}</div>
+          <div class="server-meta">${escapeHtml(meta || '暂无更多信息')}</div>
+        </div>
+        <div class="server-version">${escapeHtml(server.version || 'N/A')}</div>
+      </div>`;
+  }).join('');
+
+  const content = `
+    <section class="header">
+      <div class="title-wrap">
+        <div class="eyebrow">Survivalcraft Server Directory</div>
+        <div class="title">服务器大厅列表</div>
+      </div>
+      <div class="badge">${icons.database}${currentPage}/${totalPages}</div>
+    </section>
+    <section class="motd">共 ${list.length} 个服务器 · 第 ${currentPage}/${totalPages} 页 · 每页 ${pageSize} 个${version ? ` · 版本筛选: ${escapeHtml(version)}` : ''}</section>
+    <section class="list">
+      ${items || '<div class="motd">没有找到服务器。</div>'}
+    </section>
+  `;
+
+  const footer = escapeHtml(options.footer || config.image.footer).replace(/\n/g, '<br>');
+  return wrapHtml(content, footer);
+}
+
 function findExecutablePath() {
   const candidates = [
     process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -294,6 +383,23 @@ class StatusImageService {
       const element = await page.$('.panel');
       if (!element) {
         throw new Error('status image root element not found');
+      }
+      return await element.screenshot({ type: 'png' });
+    } finally {
+      await page.close();
+    }
+  }
+
+  async renderServerList(list, options = {}) {
+    const browser = await this.getBrowser();
+    const page = await browser.newPage();
+
+    try {
+      await page.setViewport({ width: 760, height: 1400, deviceScaleFactor: Number(options.scale || config.image.scale) || 1 });
+      await page.setContent(buildServerListHtml(list, options), { waitUntil: 'networkidle0' });
+      const element = await page.$('.panel');
+      if (!element) {
+        throw new Error('server list image root element not found');
       }
       return await element.screenshot({ type: 'png' });
     } finally {

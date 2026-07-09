@@ -46,6 +46,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       'POST /server/list': 'ScKey public server list',
+      'GET /server/list/image': 'Render ScKey public server list as PNG',
+      'POST /server/list/image': 'Render ScKey public server list as PNG (JSON body)',
       'POST /server/motd': 'Probe server MOTD',
       'POST /server/version/list': 'ScKey server version list',
       'POST /admin/server/list': 'ScKey admin server list',

@@ -257,6 +257,25 @@ curl -X POST "http://localhost:3009/api/status/image" \
 curl "http://localhost:3009/server/motd/image?address=game.example.com:28887" --output status.png
 ```
 
+服务器列表图片：
+
+```bash
+curl "http://localhost:3009/server/list/image?page=1&pageSize=10" --output server-list.png
+```
+
+```bash
+curl -X POST "http://localhost:3009/server/list/image" \
+  -H "Content-Type: application/json" \
+  -d '{"version": "", "page": 1, "pageSize": 10}' \
+  --output server-list.png
+```
+
+兼容短路径：
+
+```bash
+curl "http://localhost:3009/api/list/image?page=1&pageSize=10" --output server-list.png
+```
+
 可选配置：
 
 ```env

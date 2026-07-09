@@ -309,6 +309,41 @@ class ServerController {
     }
   }
 
+  async getServerListImage(req, res) {
+    try {
+      const result = await sckeyUpstream.forward(req, 'server/list');
+      const payload = result.data;
+
+      if (!payload || payload.code !== 0) {
+        return res.status(result.status || 502).json(payload || this.sckeyError(502, 'ScKey upstream failed'));
+      }
+
+      const list = payload.data?.list || payload.list || [];
+      if (!Array.isArray(list)) {
+        return res.status(502).json(this.sckeyError(502, 'server/list response does not contain data.list'));
+      }
+
+      const image = await statusImage.renderServerList(list, {
+        version: this.getParam(req, 'version', ''),
+        page: this.getParam(req, 'page', 1),
+        pageSize: this.getParam(req, 'pageSize', 10),
+        footer: this.getParam(req, 'footer', undefined),
+        scale: this.getParam(req, 'scale', undefined),
+      });
+
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.send(image);
+    } catch (err) {
+      logger.error('Server list image render failed', {
+        error: err.message,
+        stack: err.stack
+      });
+
+      return res.status(500).json(this.sckeyError(500, err.message || 'Failed to render server list image'));
+    }
+  }
+
   async listVersions(req, res) {
     try {
       const data = await serverDirectory.listVersions();
