@@ -1,19 +1,19 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/ServerController');
 
-// ScKey 公开服务器接口
-router.post('/server/list', (req, res) => controller.serverList(req, res));
-router.get('/server/list', (req, res) => controller.serverList(req, res));
+// ScKey å…¬å¼€æœåŠ¡å™¨æŽ¥å£
+router.post('/server/list', controller.upstream('server/list'));
+router.get('/server/list', controller.upstream('server/list'));
 router.post('/server/motd', (req, res) => controller.probeMotd(req, res));
-router.post('/server/version/list', (req, res) => controller.listVersions(req, res));
-router.get('/server/version/list', (req, res) => controller.listVersions(req, res));
+router.post('/server/version/list', controller.upstream('server/version/list'));
+router.get('/server/version/list', controller.upstream('server/version/list'));
 
-// ScKey 管理端服务器列表（权限校验由上游网关或后续登录模块接入）
-router.post('/admin/server/list', (req, res) => controller.adminServerList(req, res));
-router.get('/admin/server/list', (req, res) => controller.adminServerList(req, res));
+// ScKey ç®¡ç†ç«¯æœåŠ¡å™¨åˆ—è¡¨ï¼ˆæƒé™æ ¡éªŒç”±ä¸Šæ¸¸ç½‘å…³æˆ–åŽç»­ç™»å½•æ¨¡å—æŽ¥å…¥ï¼‰
+router.post('/admin/server/list', controller.upstream('admin/server/list'));
+router.get('/admin/server/list', controller.upstream('admin/server/list'));
 
-// ScKey 账号和服务器写接口：转发到上游，使用请求 Authorization 或 .env 的 SCKEY_BEARER_TOKEN。
+// ScKey è´¦å·å’ŒæœåŠ¡å™¨å†™æŽ¥å£ï¼šè½¬å‘åˆ°ä¸Šæ¸¸ï¼Œä½¿ç”¨è¯·æ±‚ Authorization æˆ– .env çš„ SCKEY_BEARER_TOKENã€‚
 router.post('/account/info', controller.upstream('account/info'));
 router.post('/account/servers', controller.upstream('account/servers'));
 router.post('/server/join', controller.upstream('server/join'));
@@ -46,14 +46,15 @@ router.post('/admin/server/transfer', controller.upstream('admin/server/transfer
 router.post('/admin/server/entry-policy', controller.upstream('admin/server/entry-policy'));
 router.post('/admin/server/text-audit/list', controller.upstream('admin/server/text-audit/list'));
 
-// 状态查询（兼容旧路径，支持 GET 和 POST）
+// çŠ¶æ€æŸ¥è¯¢ï¼ˆå…¼å®¹æ—§è·¯å¾„ï¼Œæ”¯æŒ GET å’Œ POSTï¼‰
 router.get('/status', (req, res) => controller.getStatus(req, res));
 router.post('/status', (req, res) => controller.getStatus(req, res));
 
-// 健康检查
+// å¥åº·æ£€æŸ¥
 router.get('/health', (req, res) => controller.health(req, res));
 
-// 清除缓存（管理员功能）
+// æ¸…é™¤ç¼“å­˜ï¼ˆç®¡ç†å‘˜åŠŸèƒ½ï¼‰
 router.delete('/cache', (req, res) => controller.clearCache(req, res));
 
 module.exports = router;
+
