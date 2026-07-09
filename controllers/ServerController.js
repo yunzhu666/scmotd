@@ -1,6 +1,8 @@
 const validator = require('../utils/validator');
 const cacheService = require('../services/CacheService');
 const probeService = require('../services/ServerMotdProbe');
+const serverDirectory = require('../services/ServerDirectoryService');
+const sckeyUpstream = require('../services/SckeyUpstreamService');
 const logger = require('../utils/logger');
 
 class ServerController {
@@ -19,6 +21,24 @@ class ServerController {
       message,
       data: null,
     };
+  }
+
+  sckeySuccess(data = '', msg = 'Success') {
+    return { code: 0, msg, data };
+  }
+
+  sckeyError(code, msg, data = '') {
+    return { code, msg, data };
+  }
+
+  getParam(req, name, fallback = '') {
+    if (req.body && req.body[name] !== undefined) {
+      return req.body[name];
+    }
+    if (req.query && req.query[name] !== undefined) {
+      return req.query[name];
+    }
+    return fallback;
   }
 
   // 格式化地址
@@ -154,6 +174,105 @@ class ServerController {
 
       return res.status(500).json(this.error(2001, 'Internal server error'));
     }
+  }
+
+  async probeMotd(req, res) {
+    try {
+      const address = String(this.getParam(req, 'address', '')).trim();
+      if (!address) {
+        return res.status(400).json(this.sckeyError(1, 'address is required'));
+      }
+
+      const timeout = validator.validateTimeout(this.getParam(req, 'timeout', 2.0));
+      const force = validator.validateForce(this.getParam(req, 'force', false));
+      const cacheKey = cacheService.getKey(address);
+
+      if (!force) {
+        const cached = cacheService.get(cacheKey);
+        if (cached) {
+          return res.json(this.sckeySuccess({
+            ...cached,
+            cached: true,
+          }));
+        }
+
+        return res.json(this.sckeySuccess({
+          address,
+          online: false,
+          pending: true,
+          cached: true,
+          updatedAt: null,
+          error: 'server probe cache is not ready',
+        }));
+      }
+
+      const result = await probeService.probeMotd(address, timeout, force);
+      const data = {
+        ...result,
+        online: true,
+        cached: false,
+        updatedAt: new Date().toISOString(),
+        cacheTtl: cacheService.successTTL,
+      };
+      cacheService.set(cacheKey, data, true);
+      return res.json(this.sckeySuccess(data));
+    } catch (err) {
+      return res.status(400).json(this.sckeyError(1, err.message));
+    }
+  }
+
+  async serverList(req, res) {
+    try {
+      const version = String(this.getParam(req, 'version', '')).trim();
+      const list = await serverDirectory.listActiveServers(version || null);
+      return res.json(this.sckeySuccess({ list }));
+    } catch (err) {
+      logger.error('Server list failed', { error: err.message });
+      return res.status(500).json(this.sckeyError(900, `获取失败${err.message}`, { error: 'internal_error' }));
+    }
+  }
+
+  async listVersions(req, res) {
+    try {
+      const data = await serverDirectory.listVersions();
+      return res.json(this.sckeySuccess(data));
+    } catch (err) {
+      logger.error('Version list failed', { error: err.message });
+      return res.status(500).json(this.sckeyError(900, `获取版本列表失败${err.message}`, { error: 'internal_error' }));
+    }
+  }
+
+  async adminServerList(req, res) {
+    try {
+      const data = await serverDirectory.listForAdmin({
+        page: this.getParam(req, 'page', 1),
+        pageSize: this.getParam(req, 'pageSize', 20),
+        keyword: this.getParam(req, 'keyword', ''),
+        state: this.getParam(req, 'state', null),
+        levelGroup: String(this.getParam(req, 'levelGroup', '') || '').trim(),
+        recommendType: String(this.getParam(req, 'recommendType', '') || '').trim(),
+      });
+      return res.json(this.sckeySuccess(data));
+    } catch (err) {
+      logger.error('Admin server list failed', { error: err.message });
+      return res.status(500).json(this.sckeyError(900, `获取失败${err.message}`, { error: 'internal_error' }));
+    }
+  }
+
+  notImplemented(name) {
+    return (req, res) => res.status(501).json(this.sckeyError(501, `${name} is not implemented in this standalone API yet`));
+  }
+
+  upstream(path) {
+    return async (req, res) => {
+      try {
+        const result = await sckeyUpstream.forward(req, path);
+        return res.status(result.status).json(result.data);
+      } catch (err) {
+        logger.error('ScKey upstream failed', { path, error: err.message });
+        return res.status(502).json(this.sckeyError(502, `ScKey upstream failed: ${err.message}`, { error: 'bad_gateway' }));
+      }
+    };
   }
 
   // 健康检查

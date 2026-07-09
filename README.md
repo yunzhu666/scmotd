@@ -37,6 +37,28 @@ npm run dev
 
 ## API 测试
 
+获取服务器大厅列表：
+
+```bash
+curl -X POST "http://localhost:3009/server/list" \
+  -H "Content-Type: application/json" \
+  -d '{"version": ""}'
+```
+
+获取服务器版本列表：
+
+```bash
+curl -X POST "http://localhost:3009/server/version/list"
+```
+
+管理端服务器列表：
+
+```bash
+curl -X POST "http://localhost:3009/admin/server/list" \
+  -H "Content-Type: application/json" \
+  -d '{"page": 1, "pageSize": 20, "keyword": "", "state": "", "levelGroup": ""}'
+```
+
 原仓库兼容入口：
 
 ```bash
@@ -151,8 +173,65 @@ async function probe() {
 
 - 默认端口：`28887`
 - 探测协议：LiteNetLib UDP
-- 探测包：`\x09` + gzip(`\x88\x00\x01`)
+- 探测包：`\x09` + raw deflate(`\x88\x00\x01`)
 - 缓存 key：`server:motd:{md5(strtolower(trim(address)))}`
 - 成功缓存：300 秒
 - 失败缓存：180 秒
 - 推荐调用：`POST /server/motd`
+
+## ScKey 数据库接口
+
+新增的服务器列表接口会直接读取 ScKey 的 PostgreSQL 数据库。配置方式：
+
+1. 在项目根目录创建 `.env`，可参考 `.env.example`
+2. 或者把 ScKey 的 `.env` 放在 `ScKey-master/.env`
+3. 或者直接设置 `DATABASE_URL`
+
+已接入的 ScKey 服务器接口：
+
+- `POST /server/list`
+- `POST /server/motd`
+- `POST /server/version/list`
+- `POST /admin/server/list`
+- `POST /account/info`
+- `POST /account/servers`
+- `POST /server/join`
+- `POST /server/left`
+- `POST /server/verify`
+- `POST /server/moderate`
+- `POST /server/player-sync/config`
+- `POST /server/player-sync/lock`
+- `POST /server/player-sync/unlock`
+- `POST /server/player-sync/pull`
+- `POST /server/player-sync/push`
+- `POST /server/create`
+- `POST /server/deleteMine`
+- `POST /owner/servers`
+- `POST /owner/servers/update`
+- `POST /owner/servers/publish-state/set`
+- `POST /owner/servers/whitelist-policy/set`
+- `POST /owner/servers/entry-policy/set`
+- `POST /owner/servers/team/list`
+- `POST /owner/servers/team/add`
+- `POST /owner/servers/team/remove`
+- `POST /owner/servers/transfer`
+- `POST /owner/servers/player-sync/list`
+- `POST /owner/servers/player-sync/save`
+- `POST /admin/server/delete`
+- `POST /admin/server/approve`
+- `POST /admin/server/recommend`
+- `POST /admin/server/version`
+- `POST /admin/server/transfer`
+- `POST /admin/server/entry-policy`
+- `POST /admin/server/text-audit/list`
+
+其中 `server/list`、`server/version/list`、`admin/server/list` 读取本地 ScKey 数据库；登录、服主、管理和玩家同步等写接口会转发到 `SCKEY_API_BASE`。
+
+转发接口会优先使用请求里的 `Authorization` 头；如果请求没有带 Authorization，可以在 `.env` 中设置：
+
+```env
+SCKEY_API_BASE=https://api.sckey.net
+SCKEY_BEARER_TOKEN=你的token
+```
+
+不要把 Bearer token 写进源码或提交到仓库。

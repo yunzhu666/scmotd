@@ -45,7 +45,10 @@ app.get('/', (req, res) => {
     service: 'Minecraft Server Status API',
     version: '1.0.0',
     endpoints: {
+      'POST /server/list': 'ScKey public server list',
       'POST /server/motd': 'Probe server MOTD',
+      'POST /server/version/list': 'ScKey server version list',
+      'POST /admin/server/list': 'ScKey admin server list',
       'GET /api/status?address=xxx': 'Query server status',
       'POST /api/status': 'Query server status (JSON body)',
       'GET /api/health': 'Health check',
