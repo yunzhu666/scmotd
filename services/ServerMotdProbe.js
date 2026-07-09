@@ -2,6 +2,7 @@ const dns = require('dns');
 const zlib = require('zlib');
 const config = require('../config');
 const logger = require('../utils/logger');
+const validator = require('../utils/validator');
 
 class ServerMotdProbe {
   constructor() {
@@ -11,17 +12,20 @@ class ServerMotdProbe {
   // DNS 解析 + IP 校验
   resolveAddress(host) {
     return new Promise((resolve, reject) => {
-      dns.lookup(host, { family: 4 }, (err, address) => {
+      dns.lookup(host, { all: true, verbatim: false }, (err, addresses) => {
         if (err) {
           return reject(new Error(`DNS resolution failed: ${err.message}`));
         }
 
         // 校验 IP 是否为公网地址
-        if (!this.isPublicIP(address)) {
-          return reject(new Error(`Blocked IP: ${address} (SSRF protection)`));
+        const candidates = Array.isArray(addresses) ? addresses : [];
+        const selected = candidates.find((item) => item && this.isPublicIP(item.address));
+        if (!selected) {
+          const resolved = candidates.map((item) => item.address).filter(Boolean).join(', ') || host;
+          return reject(new Error(`Blocked IP: ${resolved} (SSRF protection)`));
         }
 
-        resolve(address);
+        resolve(selected.address);
       });
     });
   }
@@ -31,7 +35,8 @@ class ServerMotdProbe {
     // IPv6 简单过滤
     if (ip.includes(':')) {
       // 只允许全球单播地址 (2000::/3)
-      if (ip.startsWith('2000:') || ip.startsWith('2001:') || ip.startsWith('2002:') || ip.startsWith('2003:')) {
+      const firstHextet = parseInt(ip.split(':')[0], 16);
+      if (Number.isFinite(firstHextet) && firstHextet >= 0x2000 && firstHextet <= 0x3fff) {
         return true;
       }
       // 不允许回环、链路本地、唯一本地等
@@ -227,7 +232,7 @@ class ServerMotdProbe {
   probeUDP(address, port, timeout) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-      const udp = require('dgram').createSocket('udp4');
+      const udp = require('dgram').createSocket(address.includes(':') ? 'udp6' : 'udp4');
       let resolved = false;
 
       // 超时定时器
@@ -283,16 +288,17 @@ class ServerMotdProbe {
     const startTime = Date.now();
 
     // 解析地址
-    const [host, portFromAddr] = address.includes(':')
-      ? address.split(':', 2)
-      : [address, null];
+    const parsed = validator.parseAddress(address);
+    if (!parsed) {
+      throw new Error('invalid address format');
+    }
 
-    const port = portFromAddr
-      ? parseInt(portFromAddr, 10)
+    const port = parsed.port
+      ? parsed.port
       : config.probe.defaultPort;
 
     // DNS 解析 + SSRF 校验
-    const ip = await this.resolveAddress(host);
+    const ip = await this.resolveAddress(parsed.host);
 
     // UDP 探测
     const result = await this.probeUDP(ip, port, timeout);

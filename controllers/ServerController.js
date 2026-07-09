@@ -44,12 +44,10 @@ class ServerController {
 
   // 格式化地址
   parseAddress(address) {
-    const [host, port] = address.includes(':')
-      ? address.split(':', 2)
-      : [address, null];
+    const parsed = validator.parseAddress(address);
     return {
-      host,
-      port: port ? parseInt(port, 10) : null,
+      host: parsed?.host || address,
+      port: parsed?.port || null,
     };
   }
 
@@ -108,9 +106,7 @@ class ServerController {
       }
 
       // 组装完整地址（用于缓存键）
-      const fullAddress = addressResult.port
-        ? `${addressResult.host}:${addressResult.port}`
-        : addressResult.host;
+      const fullAddress = validator.formatAddress(addressResult.host, addressResult.port);
 
       const normalizedTimeout = validator.validateTimeout(timeout);
       const forceRefresh = validator.validateForce(force);
@@ -190,9 +186,7 @@ class ServerController {
         return res.status(400).json(this.error(1001, addressResult.error));
       }
 
-      const fullAddress = addressResult.port
-        ? `${addressResult.host}:${addressResult.port}`
-        : addressResult.host;
+      const fullAddress = validator.formatAddress(addressResult.host, addressResult.port);
 
       const normalizedTimeout = validator.validateTimeout(timeout);
       const forceRefresh = validator.validateForce(force);
@@ -407,12 +401,10 @@ class ServerController {
       if (!addressResult.valid) {
         return res.status(400).json(this.error(1001, addressResult.error));
       }
-      const fullAddress = addressResult.port
-        ? `${addressResult.host}:${addressResult.port}`
-        : addressResult.host;
+      const fullAddress = validator.formatAddress(addressResult.host, addressResult.port);
       // 清除所有超时版本的缓存
-      const keys = Array.from(cacheService.cache.keys());
-      const toDelete = keys.filter(k => k.includes(fullAddress));
+      const cacheKey = cacheService.getKey(fullAddress);
+      const toDelete = cacheService.cache.has(cacheKey) ? [cacheKey] : [];
       toDelete.forEach(k => cacheService.delete(k));
       return res.json(this.success({ deleted: toDelete.length }));
     } else {

@@ -67,6 +67,14 @@ curl -X POST "http://localhost:3009/server/motd" \
   -d '{"address": "game.example.com:28887", "timeout": 2.0, "force": false}'
 ```
 
+IPv6 地址支持裸地址和带端口的方括号格式：
+
+```bash
+curl -X POST "http://localhost:3009/server/motd" \
+  -H "Content-Type: application/json" \
+  -d '{"address": "[2408:8207:abcd::1]:28887", "timeout": 2.0, "force": true}'
+```
+
 兼容查询入口（GET）：
 
 ```bash
