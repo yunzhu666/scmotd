@@ -235,3 +235,34 @@ SCKEY_BEARER_TOKEN=你的token
 ```
 
 不要把 Bearer token 写进源码或提交到仓库。
+
+## 状态图片接口
+
+图片接口会返回 `image/png`，样式与 Koishi 插件的服务器状态卡片一致：
+
+```bash
+curl "http://localhost:3009/api/status/image?address=game.example.com:28887" --output status.png
+```
+
+```bash
+curl -X POST "http://localhost:3009/api/status/image" \
+  -H "Content-Type: application/json" \
+  -d '{"address": "game.example.com:28887", "timeout": 3.0, "force": true}' \
+  --output status.png
+```
+
+兼容 ScKey MOTD 路径：
+
+```bash
+curl "http://localhost:3009/server/motd/image?address=game.example.com:28887" --output status.png
+```
+
+可选配置：
+
+```env
+PUPPETEER_EXECUTABLE_PATH=
+STATUS_IMAGE_FOOTER=ClouderyStudio
+STATUS_IMAGE_SCALE=1
+```
+
+如果 `PUPPETEER_EXECUTABLE_PATH` 留空，服务会自动尝试常见的 Chrome / Edge 安装路径。

@@ -38,4 +38,10 @@ module.exports = {
     level: 'info',
     format: 'json',
   },
+
+  image: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '',
+    footer: process.env.STATUS_IMAGE_FOOTER || 'ClouderyStudio',
+    scale: parseFloat(process.env.STATUS_IMAGE_SCALE || '1'),
+  },
 };

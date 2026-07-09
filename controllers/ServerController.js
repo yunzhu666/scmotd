@@ -3,6 +3,7 @@ const cacheService = require('../services/CacheService');
 const probeService = require('../services/ServerMotdProbe');
 const serverDirectory = require('../services/ServerDirectoryService');
 const sckeyUpstream = require('../services/SckeyUpstreamService');
+const statusImage = require('../services/StatusImageService');
 const logger = require('../utils/logger');
 
 class ServerController {
@@ -173,6 +174,82 @@ class ServerController {
       });
 
       return res.status(500).json(this.error(2001, 'Internal server error'));
+    }
+  }
+
+  async getStatusImage(req, res) {
+    try {
+      const address = req.query.address || req.body.address;
+      const timeout = req.query.timeout || req.body.timeout;
+      const force = req.query.force !== undefined
+        ? req.query.force
+        : req.body.force;
+
+      const addressResult = validator.validateAddress(address);
+      if (!addressResult.valid) {
+        return res.status(400).json(this.error(1001, addressResult.error));
+      }
+
+      const fullAddress = addressResult.port
+        ? `${addressResult.host}:${addressResult.port}`
+        : addressResult.host;
+
+      const normalizedTimeout = validator.validateTimeout(timeout);
+      const forceRefresh = validator.validateForce(force);
+      const cacheKey = cacheService.getKey(fullAddress);
+      let formatted;
+
+      if (!forceRefresh) {
+        const cached = cacheService.get(cacheKey);
+        if (cached) {
+          logger.info('Cache hit', { address: fullAddress, key: cacheKey });
+          formatted = cached.online
+            ? this.formatResponse(cached, fullAddress, true)
+            : this.formatResponse({ online: false, error: cached.error }, fullAddress, true);
+        }
+      }
+
+      if (!formatted) {
+        logger.info('Probing server', { address: fullAddress, timeout: normalizedTimeout });
+
+        try {
+          const probeResult = await probeService.probeMotd(
+            fullAddress,
+            normalizedTimeout,
+            forceRefresh
+          );
+          cacheService.set(cacheKey, probeResult, true);
+          formatted = this.formatResponse(probeResult, fullAddress, false);
+        } catch (err) {
+          logger.warn('Probe failed', {
+            address: fullAddress,
+            error: err.message
+          });
+
+          const failData = {
+            online: false,
+            error: err.message,
+          };
+          cacheService.set(cacheKey, failData, false);
+          formatted = this.formatResponse(failData, fullAddress, false);
+        }
+      }
+
+      const image = await statusImage.renderStatus(formatted, {
+        footer: this.getParam(req, 'footer', undefined),
+        scale: this.getParam(req, 'scale', undefined),
+      });
+
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', formatted.cached ? 'public, max-age=60' : 'no-store');
+      return res.send(image);
+    } catch (err) {
+      logger.error('Status image render failed', {
+        error: err.message,
+        stack: err.stack
+      });
+
+      return res.status(500).json(this.error(2002, err.message || 'Failed to render image'));
     }
   }
 
