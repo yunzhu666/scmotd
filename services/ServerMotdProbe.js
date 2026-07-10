@@ -1,4 +1,5 @@
 const dns = require('dns');
+const net = require('net');
 const zlib = require('zlib');
 const config = require('../config');
 const logger = require('../utils/logger');
@@ -10,24 +11,46 @@ class ServerMotdProbe {
   }
 
   // DNS 解析 + IP 校验
-  resolveAddress(host) {
-    return new Promise((resolve, reject) => {
-      dns.lookup(host, { all: true, verbatim: false }, (err, addresses) => {
-        if (err) {
-          return reject(new Error(`DNS resolution failed: ${err.message}`));
-        }
+  // 优先解析 A 记录（IPv4），其次 AAAA 记录（IPv6），避免在无 IPv6 网络的部署环境中
+  // 因 getaddrinfo 无法返回 AAAA 记录而误报"Blocked IP"
+  async resolveAddress(host) {
+    // 直接传入 IP 地址时跳过 DNS 解析
+    const family = net.isIP(host);
+    if (family) {
+      if (!this.isPublicIP(host)) {
+        throw new Error(`Blocked IP: ${host} (SSRF protection)`);
+      }
+      return host;
+    }
 
-        // 校验 IP 是否为公网地址
-        const candidates = Array.isArray(addresses) ? addresses : [];
-        const selected = candidates.find((item) => item && this.isPublicIP(item.address));
-        if (!selected) {
-          const resolved = candidates.map((item) => item.address).filter(Boolean).join(', ') || host;
-          return reject(new Error(`Blocked IP: ${resolved} (SSRF protection)`));
-        }
+    // 先尝试 IPv4
+    let ipv4 = [];
+    try {
+      ipv4 = await dns.promises.resolve4(host);
+    } catch (e) {
+      // 无 A 记录，忽略
+    }
 
-        resolve(selected.address);
-      });
-    });
+    const publicIPv4 = ipv4.filter((a) => this.isPublicIP(a));
+    if (publicIPv4.length > 0) {
+      return publicIPv4[0];
+    }
+
+    // 再尝试 IPv6
+    let ipv6 = [];
+    try {
+      ipv6 = await dns.promises.resolve6(host);
+    } catch (e) {
+      // 无 AAAA 记录，忽略
+    }
+
+    const publicIPv6 = ipv6.filter((a) => this.isPublicIP(a));
+    if (publicIPv6.length > 0) {
+      return publicIPv6[0];
+    }
+
+    const allResolved = [...ipv4, ...ipv6].join(', ') || host;
+    throw new Error(`Blocked IP: ${allResolved} (SSRF protection)`);
   }
 
   // 检查 IP 是否为公网地址（防 SSRF）
@@ -232,7 +255,13 @@ class ServerMotdProbe {
   probeUDP(address, port, timeout) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
-      const udp = require('dgram').createSocket(address.includes(':') ? 'udp6' : 'udp4');
+      const socketType = net.isIP(address) === 6 ? 'udp6' : 'udp4';
+      let udp;
+      try {
+        udp = require('dgram').createSocket(socketType);
+      } catch (e) {
+        return reject(new Error(`Failed to create ${socketType} socket: ${e.message}`));
+      }
       let resolved = false;
 
       // 超时定时器
