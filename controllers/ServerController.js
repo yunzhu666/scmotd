@@ -89,6 +89,37 @@ class ServerController {
     }
   }
 
+  async probeStatus(req, address, timeout, forceRefresh) {
+    if (config.probe.useSckeyUpstream) {
+      try {
+        const upstreamReq = {
+          ...req,
+          method: 'POST',
+          body: {
+            address,
+            timeout,
+            force: forceRefresh,
+          },
+          query: {},
+        };
+
+        const result = await sckeyUpstream.forward(upstreamReq, 'server/motd');
+        const payload = result.data;
+
+        if (payload && payload.code === 0 && payload.data) {
+          return payload.data;
+        }
+      } catch (err) {
+        logger.warn('ScKey upstream probe failed, fallback to local probe', {
+          address,
+          error: err.message,
+        });
+      }
+    }
+
+    return probeService.probeMotd(address, timeout, forceRefresh);
+  }
+
   // 主处理函数
   async getStatus(req, res) {
     try {
@@ -135,11 +166,7 @@ class ServerController {
 
       let probeResult;
       try {
-        probeResult = await probeService.probeMotd(
-          fullAddress,
-          normalizedTimeout,
-          forceRefresh
-        );
+        probeResult = await this.probeStatus(req, fullAddress, normalizedTimeout, forceRefresh);
 
         // 探测成功，写入缓存
         cacheService.set(cacheKey, probeResult, true);
@@ -207,11 +234,7 @@ class ServerController {
         logger.info('Probing server', { address: fullAddress, timeout: normalizedTimeout });
 
         try {
-          const probeResult = await probeService.probeMotd(
-            fullAddress,
-            normalizedTimeout,
-            forceRefresh
-          );
+          const probeResult = await this.probeStatus(req, fullAddress, normalizedTimeout, forceRefresh);
           cacheService.set(cacheKey, probeResult, true);
           formatted = this.formatResponse(probeResult, fullAddress, false);
         } catch (err) {
@@ -277,7 +300,7 @@ class ServerController {
         }));
       }
 
-      const result = await probeService.probeMotd(address, timeout, force);
+      const result = await this.probeStatus(req, address, timeout, force);
       const data = {
         ...result,
         online: true,

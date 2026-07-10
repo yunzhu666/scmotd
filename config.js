@@ -1,25 +1,21 @@
 module.exports = {
-  // 服务器配置
   port: 3009,
   host: '0.0.0.0',
 
-  // 缓存配置
   cache: {
-    successTTL: 300, // 成功状态缓存 5 分钟（秒）
-    failTTL: 180,    // 失败状态缓存 3 分钟（秒）
+    successTTL: 300,
+    failTTL: 180,
   },
 
-  // 探测配置
   probe: {
-    defaultTimeout: 2.0,  // 默认超时（秒）
+    defaultTimeout: 2.0,
     minTimeout: 0.5,
     maxTimeout: 5.0,
-    defaultPort: 28887,   // Minecraft 默认端口
+    defaultPort: 28887,
+    useSckeyUpstream: process.env.PROBE_USE_SCKEY_UPSTREAM !== 'false',
   },
 
-  // 安全配置
   security: {
-    // 禁止探测的内网 IP 段
     blockedIPRanges: [
       '127.0.0.0/8',
       '10.0.0.0/8',
@@ -33,7 +29,6 @@ module.exports = {
     maxAddressLength: 255,
   },
 
-  // 日志配置
   logging: {
     level: 'info',
     format: 'json',

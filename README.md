@@ -293,3 +293,9 @@ STATUS_IMAGE_SCALE=1
 ```
 
 如果 `PUPPETEER_EXECUTABLE_PATH` 留空，服务会自动尝试常见的 Chrome / Edge 安装路径。
+
+测速优先走 ScKey 上游时，可在 `.env` 里保留默认值；如需强制回退本地探测，设置：
+
+```env
+PROBE_USE_SCKEY_UPSTREAM=false
+```
