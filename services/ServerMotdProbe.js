@@ -1,4 +1,4 @@
-const dns = require('dns');
+﻿const dns = require('dns');
 const net = require('net');
 const zlib = require('zlib');
 const config = require('../config');
@@ -10,11 +10,10 @@ class ServerMotdProbe {
     this.blockedRanges = config.security.blockedIPRanges;
   }
 
-  // DNS 解析 + IP 校验
-  // 优先解析 A 记录（IPv4），其次 AAAA 记录（IPv6），避免在无 IPv6 网络的部署环境中
-  // 因 getaddrinfo 无法返回 AAAA 记录而误报"Blocked IP"
+  // DNS è§£æž + IP æ ¡éªŒ
+  // ä¼˜å…ˆè§£æž A è®°å½•ï¼ˆIPv4ï¼‰ï¼Œå…¶æ¬¡ AAAA è®°å½•ï¼ˆIPv6ï¼‰ï¼Œé¿å…åœ¨æ—  IPv6 ç½‘ç»œçš„éƒ¨ç½²çŽ¯å¢ƒä¸­
+  // å›  getaddrinfo æ— æ³•è¿”å›ž AAAA è®°å½•è€Œè¯¯æŠ¥"Blocked IP"
   async resolveAddress(host) {
-    // 直接传入 IP 地址时跳过 DNS 解析
     const family = net.isIP(host);
     if (family) {
       if (!this.isPublicIP(host)) {
@@ -23,50 +22,41 @@ class ServerMotdProbe {
       return host;
     }
 
-    // 先尝试 IPv4
-    let ipv4 = [];
+    let addresses = [];
     try {
-      ipv4 = await dns.promises.resolve4(host);
+      addresses = await dns.promises.lookup(host, { all: true, verbatim: false });
     } catch (e) {
-      // 无 A 记录，忽略
+      throw new Error(`DNS resolution failed: ${e.message}`);
     }
 
-    const publicIPv4 = ipv4.filter((a) => this.isPublicIP(a));
-    if (publicIPv4.length > 0) {
-      return publicIPv4[0];
+    const publicAddresses = addresses
+      .map((item) => item && item.address)
+      .filter((address) => typeof address === 'string' && this.isPublicIP(address));
+
+    if (publicAddresses.length > 0) {
+      const preferred = publicAddresses.find((address) => net.isIP(address) === 6)
+        || publicAddresses[0];
+      return preferred;
     }
 
-    // 再尝试 IPv6
-    let ipv6 = [];
-    try {
-      ipv6 = await dns.promises.resolve6(host);
-    } catch (e) {
-      // 无 AAAA 记录，忽略
-    }
-
-    const publicIPv6 = ipv6.filter((a) => this.isPublicIP(a));
-    if (publicIPv6.length > 0) {
-      return publicIPv6[0];
-    }
-
-    const allResolved = [...ipv4, ...ipv6].join(', ') || host;
+    const allResolved = addresses.map((item) => item && item.address).filter(Boolean).join(', ') || host;
     throw new Error(`Blocked IP: ${allResolved} (SSRF protection)`);
   }
 
   // 检查 IP 是否为公网地址（防 SSRF）
   isPublicIP(ip) {
-    // IPv6 简单过滤
+    // IPv6 ç®€å•è¿‡æ»¤
     if (ip.includes(':')) {
-      // 只允许全球单播地址 (2000::/3)
+      // åªå…è®¸å…¨çƒå•æ’­åœ°å€ (2000::/3)
       const firstHextet = parseInt(ip.split(':')[0], 16);
       if (Number.isFinite(firstHextet) && firstHextet >= 0x2000 && firstHextet <= 0x3fff) {
         return true;
       }
-      // 不允许回环、链路本地、唯一本地等
+      // ä¸å…è®¸å›žçŽ¯ã€é“¾è·¯æœ¬åœ°ã€å”¯ä¸€æœ¬åœ°ç­‰
       return false;
     }
 
-    // IPv4 校验
+    // IPv4 æ ¡éªŒ
     const parts = ip.split('.').map(Number);
     if (parts.length !== 4) return false;
 
@@ -82,15 +72,15 @@ class ServerMotdProbe {
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
     // 192.168.0.0/16
     if (parts[0] === 192 && parts[1] === 168) return false;
-    // 224.0.0.0/4 (多播)
+    // 224.0.0.0/4 (å¤šæ’­)
     if (parts[0] >= 224 && parts[0] <= 239) return false;
-    // 240.0.0.0/4 (保留)
+    // 240.0.0.0/4 (ä¿ç•™)
     if (parts[0] >= 240) return false;
 
     return true;
   }
 
-  // 构建探测包（符合 LiteNetLib 协议）
+  // æž„å»ºæŽ¢æµ‹åŒ…ï¼ˆç¬¦åˆ LiteNetLib åè®®ï¼‰
   buildProbePacket() {
     const payload = Buffer.from([0x88, 0x00, 0x01]);
     return Buffer.concat([Buffer.from([0x09]), zlib.deflateRawSync(payload)]);
@@ -196,7 +186,7 @@ class ServerMotdProbe {
     }
   }
 
-  // 解析响应数据
+  // è§£æžå“åº”æ•°æ®
   parseResponse(data, latencyMs) {
     try {
       const payload = this.decompressLiteNetPayload(data);
@@ -251,7 +241,7 @@ class ServerMotdProbe {
     }
   }
 
-  // UDP 探测
+  // UDP æŽ¢æµ‹
   probeUDP(address, port, timeout) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
@@ -264,7 +254,7 @@ class ServerMotdProbe {
       }
       let resolved = false;
 
-      // 超时定时器
+      // è¶…æ—¶å®šæ—¶å™¨
       const timer = setTimeout(() => {
         if (!resolved) {
           resolved = true;
@@ -273,7 +263,7 @@ class ServerMotdProbe {
         }
       }, timeout * 1000);
 
-      // 接收响应
+      // æŽ¥æ”¶å“åº”
       udp.on('message', (msg) => {
         if (resolved) return;
         resolved = true;
@@ -299,7 +289,7 @@ class ServerMotdProbe {
         reject(new Error(`Socket error: ${err.message}`));
       });
 
-      // 发送探测包
+      // å‘é€æŽ¢æµ‹åŒ…
       const packet = this.buildProbePacket();
       udp.send(packet, 0, packet.length, port, address, (err) => {
         if (err) {
@@ -312,11 +302,11 @@ class ServerMotdProbe {
     });
   }
 
-  // 主探测方法
+  // ä¸»æŽ¢æµ‹æ–¹æ³•
   async probeMotd(address, timeout, force = false) {
     const startTime = Date.now();
 
-    // 解析地址
+    // è§£æžåœ°å€
     const parsed = validator.parseAddress(address);
     if (!parsed) {
       throw new Error('invalid address format');
@@ -326,13 +316,13 @@ class ServerMotdProbe {
       ? parsed.port
       : config.probe.defaultPort;
 
-    // DNS 解析 + SSRF 校验
+    // DNS è§£æž + SSRF æ ¡éªŒ
     const ip = await this.resolveAddress(parsed.host);
 
-    // UDP 探测
+    // UDP æŽ¢æµ‹
     const result = await this.probeUDP(ip, port, timeout);
 
-    // 补充元数据
+    // è¡¥å……å…ƒæ•°æ®
     result.address = address;
     result.ip = ip;
     result.port = port;
@@ -343,3 +333,4 @@ class ServerMotdProbe {
 }
 
 module.exports = new ServerMotdProbe();
+
